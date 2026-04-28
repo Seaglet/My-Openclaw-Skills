@@ -1,52 +1,48 @@
 #!/bin/bash
-# 任务名：获取4月发货数据
-# 从WPS在线文档"2604发货"子表E43单元格获取汇总金额
+# 获取4月发货数据
+# 使用 kdocs CLI 直接读取 WPS 在线表格 E43 单元格
 
-# 文档链接
-DOC_URL="https://365.kdocs.cn/l/ccfgfXOxcW7c?from=docs"
+set -e
 
-# Session名称（保持登录状态）
-SESSION_NAME="wps-doc"
+# 配置
+FILE_ID="avfCFBGrK1MRpvGy92VK1xXQsZJqEnfAp"
+SHEET_ID=74
+ROW_FROM=42
+ROW_TO=42
+COL_FROM=4
+COL_TO=4
 
-# 截图目录
-SCREENSHOT_DIR="/app/data/所有对话/主对话/browser/screenshots/april-delivery"
-mkdir -p "$SCREENSHOT_DIR"
+# 检查 Token
+if [ -z "$KINGSOFT_DOCS_TOKEN" ]; then
+    echo "错误: 未设置 KINGSOFT_DOCS_TOKEN 环境变量"
+    echo "请先设置: export KINGSOFT_DOCS_TOKEN=<your_token>"
+    exit 1
+fi
 
-echo "=== 开始获取4月发货数据 ==="
+# 执行读取
+RESULT=$(kdocs-cli sheet get-range-data "{
+  \"file_id\": \"$FILE_ID\",
+  \"sheetId\": $SHEET_ID,
+  \"range\": {
+    \"rowFrom\": $ROW_FROM,
+    \"rowTo\": $ROW_TO,
+    \"colFrom\": $COL_FROM,
+    \"colTo\": $COL_TO
+  }
+}" --silent 2>/dev/null)
 
-# 1. 打开文档（使用持久化session，保持登录状态）
-echo "步骤1: 打开WPS文档（使用持久化session）..."
-agent-browser --session-name "$SESSION_NAME" open "$DOC_URL" && agent-browser --session-name "$SESSION_NAME" tab 0
-agent-browser --session-name "$SESSION_NAME" wait --load networkidle
+# 解析结果
+ORIGINAL=$(echo "$RESULT" | grep -o '"originalCellValue":"[^"]*"' | sed 's/"originalCellValue":"//;s/"//')
+CELL_TEXT=$(echo "$RESULT" | grep -o '"cellText":"[^"]*"' | sed 's/"cellText":"//;s/"//')
 
-# 2. 截图查看当前页面
-echo "步骤2: 获取页面快照..."
-agent-browser screenshot "$SCREENSHOT_DIR/page1.png"
+# 计算万元值
+WANYUAN=$(echo "scale=2; $ORIGINAL / 10000" | bc)
 
-# 3. 获取页面元素
-echo "步骤3: 分析页面元素..."
-agent-browser snapshot -i
-
-# 4. 切换到"2604发货"子表（如果需要）
-# 这一步需要根据snapshot结果判断是否需要切换
-
-# 5. 滚动到表格底部（E43位置）
-echo "步骤4: 滚动到表格底部..."
-for i in {1..10}; do
-    agent-browser scroll down 500
-    sleep 1
-done
-
-# 6. 截图查看E43位置
-echo "步骤5: 截图获取E43单元格..."
-agent-browser screenshot "$SCREENSHOT_DIR/e43.png"
-
-# 7. 获取E43单元格值
-echo "步骤6: 读取E43单元格值..."
-# 需要根据页面元素定位E43，这里需要人工确认或通过snapshot找到对应元素
-
-echo "=== 任务完成 ==="
-echo "请查看截图: $SCREENSHOT_DIR/e43.png"
-
-# 注意：完整自动化需要根据页面元素动态获取E43的值
-# 当前脚本提供了基本框架，实际执行时需要结合snapshot结果定位元素
+# 输出
+echo "=========================================="
+echo "4月发货数据汇总"
+echo "=========================================="
+echo "原始值：$ORIGINAL"
+echo "显示值：$CELL_TEXT"
+echo "万元值：$WANYUAN 万元"
+echo "=========================================="
