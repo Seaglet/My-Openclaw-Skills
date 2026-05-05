@@ -1204,7 +1204,7 @@
                 date: dateStr,
                 statData: JSON.parse(JSON.stringify(statData)), // 深拷贝
                 sortedStats: JSON.parse(JSON.stringify(window.sortedStats || sortedStats)), // 深拷贝
-                chartDataUrl: currentChartDataUrl // 保存图表 data URL
+                channels: JSON.parse(JSON.stringify(Object.keys(statData))) // 保存渠道顺序
             };
             
             // 添加到数组开头
@@ -1265,14 +1265,24 @@
             // 显示统计表预览
             showPreview();
             
-            // 显示图表
-            const chartPreview = document.getElementById('chartPreview');
-            const chartImage = document.getElementById('chartImage');
-            if (record.chartDataUrl) {
-                chartImage.src = record.chartDataUrl;
-                chartPreview.style.display = 'block';
-            } else {
-                chartPreview.style.display = 'none';
+            // 用Canvas重绘图表
+            try {
+                generateChart().then(imageBlob => {
+                    if (imageBlob) {
+                        const reader = new FileReader();
+                        reader.onload = function() {
+                            const chartPreview = document.getElementById('chartPreview');
+                            const chartImage = document.getElementById('chartImage');
+                            chartImage.src = reader.result;
+                            chartPreview.style.display = 'block';
+                            currentChartDataUrl = reader.result;
+                        };
+                        reader.readAsDataURL(imageBlob);
+                    }
+                });
+            } catch(e) {
+                console.error('重绘图表失败:', e);
+                document.getElementById('chartPreview').style.display = 'none';
             }
             
             // 确保输出区域可见
