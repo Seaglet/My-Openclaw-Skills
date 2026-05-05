@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>未发货订单统计工具</title>
+    <!-- 引入SheetJS库 -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <!-- 引入FileSaver.js用于文件下载 -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/FileSaver.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        
+        .card-title {
+            font-size: 1.3rem;
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .card-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: linear-gradient(180deg, #667eea, #764ba2);
+            border-radius: 2px;
+        }
+        
+        .input-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .input-section {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .input-group {
+            margin-bottom: 20px;
+        }
+        
+        .input-group label {
+            display: block;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 8px;
+        }
+        
+        .url-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        .url-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .drop-zone {
+            border: 3px dashed #d0d0d0;
+            border-radius: 12px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #fafafa;
+        }
+        
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: #667eea;
+            background: #f0f0ff;
+        }
+        
+        .drop-zone-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        
+        .drop-zone-text {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .drop-zone-text span {
+            color: #667eea;
+            font-weight: 600;
+        }
+        
+        .file-info {
+            margin-top: 15px;
+            padding: 12px;
+            background: #e8f5e9;
+            border-radius: 8px;
+            color: #2e7d32;
+            display: none;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 14px 32px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f5f5f5;
+            color: #666;
+        }
+        
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        .progress-section {
+            display: none;
+            margin-top: 20px;
+        }
+        
+        .progress-bar {
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        .progress-text {
+            text-align: center;
+            margin-top: 10px;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .output-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .output-section {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .output-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .output-card h4 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        
+        .download-link {
+            display: inline-block;
+            padding: 10px 24px;
+            background: #4caf50;
+            color: white;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+        
+        .download-link:hover {
+            background: #45a049;
+        }
+        
+        .preview-container {
+            margin-top: 20px;
+            overflow-x: auto;
+        }
+        
+        .preview-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        
+        .preview-table th {
+            background: #667eea;
+            color: white;
+            padding: 10px 8px;
+            text-align: center;
+            font-weight: 600;
+        }
+        
+        .preview-table td {
+            padding: 8px;
+            text-align: center;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .preview-table tr:nth-child(even) {
+            background: #f5f5f5;
+        }
+        
+        .preview-table tr:last-child {
+            background: #fff3cd;
+            font-weight: 600;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        .log-container {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #f5f5f5;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            margin-top: 15px;
+        }
+        
+        .log-item {
+            margin-bottom: 5px;
+            color: #333;
+        }
+        
+        .log-item.success {
+            color: #4caf50;
+        }
+        
+        .log-item.info {
+            color: #2196f3;
+        }
+        
+        .log-item.warning {
+            color: #ff9800;
+        }
+        
+        .download-link.disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📦 未发货订单统计工具</h1>
+            <p>基于SheetJS纯前端处理Excel数据，快速生成发货计划统计</p>
+        </div>
+        
+        <!-- 输入区域 -->
+        <div class="card">
+            <h2 class="card-title">数据输入</h2>
+            
+            <div class="input-section">
+                <!-- URL输入 -->
+                <div>
+                    <div class="input-group">
+                        <label>📎 原始数据下载链接</label>
+                        <input type="text" id="urlInput" class="url-input" placeholder="请输入Excel文件的URL链接">
+                    </div>
+                    <button class="btn btn-secondary" id="loadUrlBtn" onclick="loadFromUrl()">
+                        🌐 从链接加载
+                    </button>
+                </div>
+                
+                <!-- 文件拖拽 -->
+                <div>
+                    <div class="input-group">
+                        <label>📁 或拖拽上传Excel文件</label>
+                    </div>
+                    <div class="drop-zone" id="dropZone">
+                        <div class="drop-zone-icon">📄</div>
+                        <div class="drop-zone-text">
+                            拖拽Excel文件到此处，或 <span>点击选择</span>
+                        </div>
+                        <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none">
+                    </div>
+                    <div class="file-info" id="fileInfo"></div>
+                </div>
+            </div>
+            
+            <div class="btn-group" style="margin-top: 25px;">
+                <button class="btn btn-primary" id="processBtn" onclick="processData()" disabled>
+                    🚀 开始处理
+                </button>
+                <button class="btn btn-secondary" onclick="resetAll()">
+                    🔄 重置
+                </button>
+            </div>
+            
+            <div class="progress-section" id="progressSection">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text" id="progressText">准备中...</div>
+            </div>
+            
+            <div class="log-container hidden" id="logContainer"></div>
+        </div>
+        
+        <!-- 输出区域 -->
+        <div class="card" id="outputCard">
+            <h2 class="card-title">处理结果</h2>
+            
+            <div class="output-section">
+                <div class="output-card">
+                    <h4>📊 生成的Excel文件</h4>
+                    <p style="color: #666; font-size: 14px;">包含：处理后数据、透视表、统计表</p>
+                    <a href="#" class="download-link disabled" id="downloadExcel" onclick="return false;">
+                        ⬇️ 下载Excel
+                    </a>
+                </div>
+                
+                <div class="output-card">
+                    <h4>📈 统计图表</h4>
+                    <p style="color: #666; font-size: 14px;">可直接保存或截图使用</p>
+                    <!-- Bug4修复：添加图表预览区域 -->
+                    <div id="chartPreview" style="margin: 15px 0; display: none;">
+                        <img id="chartImage" style="max-width: 100%; border: 1px solid #ddd; border-radius: 8px;">
+                    </div>
+                    <a href="#" class="download-link disabled" id="downloadImage" onclick="return false;">
+                        ⬇️ 下载图片
+                    </a>
+                </div>
+            </div>
+            
+            <div class="preview-container" id="previewContainer">
+                <h3 style="margin: 20px 0 15px; color: #333;">📋 统计表预览</h3>
+                <div id="tablePreview">
+                    <p style="color: #999; text-align: center; padding: 40px;">等待处理数据...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 用于生成图片的Canvas -->
+    <canvas id="chartCanvas" style="display: none;"></canvas>
+    
+    <script>
+        // 全局变量
+        let originalData = null;
+        let processedData = null;
+        let pivotData = null;
+        let statData = null;
+        let sortedStats = []; // 保存排序后的统计项目列表
+        
+        // 列名常量
+        const COLUMNS = {
+            MARK: '标记',
+            STATUS: '订单-发货通知状态',
+            PROMISE_TIME: '订单-人工承诺发货时间',
+            CHANNEL: '销售渠道',
+            AMOUNT: '应收合计'
+        };
+        
+        // DOM元素
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const processBtn = document.getElementById('processBtn');
+        const progressSection = document.getElementById('progressSection');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const logContainer = document.getElementById('logContainer');
+        const outputCard = document.getElementById('outputCard');
+        
+        // 日志函数
+        function log(message, type = 'info') {
+            const logContainer = document.getElementById('logContainer');
+            logContainer.classList.remove('hidden');
+            const item = document.createElement('div');
+            item.className = `log-item ${type}`;
+            item.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logContainer.appendChild(item);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+        
+        // 更新进度
+        function updateProgress(percent, text) {
+            progressSection.style.display = 'block';
+            progressFill.style.width = percent + '%';
+            progressText.textContent = text;
+        }
+        
+        // 拖拽事件
+        dropZone.addEventListener('click', () => fileInput.click());
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+        
+        // 处理文件
+        async function handleFile(file) {
+            if (!file.name.match(/\.(xlsx|xls)$/i)) {
+                alert('请选择Excel文件！');
+                return;
+            }
+            
+            log(`正在读取文件: ${file.name}`, 'info');
+            updateProgress(10, '正在读取文件...');
+            
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                originalData = XLSX.utils.sheet_to_json(worksheet);
+                
+                fileInfo.style.display = 'block';
+                fileInfo.innerHTML = `✅ 已加载: ${file.name}<br>📊 共 ${originalData.length} 行数据`;
+                
+                log(`文件读取成功，共 ${originalData.length} 行数据`, 'success');
+                updateProgress(30, '文件加载完成');
+                
+                // Bug1修复：自动开始处理，不需要再次点击
+                processData();
+                
+            } catch (error) {
+                log(`读取文件失败: ${error.message}`, 'warning');
+                alert('读取文件失败：' + error.message);
+            }
+        }
+        
+        // 从URL加载
+        async function loadFromUrl() {
+            const url = document.getElementById('urlInput').value.trim();
+            if (!url) {
+                alert('请输入URL链接');
+                return;
+            }
+            
+            log(`正在从URL加载数据...`, 'info');
+            updateProgress(10, '正在下载文件...');
+            
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('下载失败');
+                
+                const arrayBuffer = await response.arrayBuffer();
+                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                originalData = XLSX.utils.sheet_to_json(worksheet);
+                
+                fileInfo.style.display = 'block';
+                fileInfo.innerHTML = `✅ URL加载成功<br>📊 共 ${originalData.length} 行数据`;
+                
+                log(`URL数据加载成功，共 ${originalData.length} 行`, 'success');
+                updateProgress(30, '文件加载完成');
+                
+                // Bug1修复：自动开始处理，不需要再次点击
+                processData();
+                
+            } catch (error) {
+                log(`URL加载失败: ${error.message}`, 'warning');
+                alert('从URL加载失败：' + error.message);
+            }
+        }
+        
+        // 处理数据
+        async function processData() {
+            if (!originalData || originalData.length === 0) {
+                alert('请先加载数据！');
+                return;
+            }
+            
+            log('开始处理数据...', 'info');
+            updateProgress(40, '正在处理数据...');
+            
+            try {
+                // 步骤1: 添加客审状态列
+                log('步骤1: 添加客审状态列', 'info');
+                const data1 = originalData.map(row => {
+                    const mark = row[COLUMNS.MARK] || '';
+                    let 客审状态 = '未客审';
+                    if (typeof mark === 'string' && (mark.includes('客审') || mark.includes('货审'))) {
+                        客审状态 = '已客审';
+                    }
+                    return { ...row, '客审状态': 客审状态 };
+                });
+                
+                await sleep(100);
+                updateProgress(50, '步骤2: 添加发货时间类型...');
+                
+                // 步骤2: 添加发货时间类型列
+                log('步骤2: 添加发货时间类型列', 'info');
+                const data2 = data1.map(row => {
+                    const status = row[COLUMNS.STATUS] || '';
+                    let 发货时间类型 = '';
+                    if (status) {
+                        const statusStr = String(status).trim();
+                        if (statusStr === '加急发货' || statusStr === '指定时间发货') {
+                            发货时间类型 = '指定时间';
+                        } else if (statusStr.includes('有货就发') || statusStr.includes('等通知')) {
+                            发货时间类型 = '等通知';
+                        }
+                    }
+                    return { ...row, '发货时间类型': 发货时间类型 };
+                });
+                
+                await sleep(100);
+                updateProgress(60, '步骤3: 格式化日期...');
+                
+                // 步骤3: 格式化日期
+                log('步骤3: 格式化订单-人工承诺发货时间', 'info');
+                const data3 = data2.map(row => {
+                    const time = row[COLUMNS.PROMISE_TIME];
+                    let 格式化日期 = '';
+                    if (time) {
+                        try {
+                            const date = new Date(time);
+                            if (!isNaN(date.getTime())) {
+                                格式化日期 = `${date.getFullYear()}年${String(date.getMonth() + 1).padStart(2, '0')}月`;
+                            }
+                        } catch (e) {}
+                    }
+                    return { ...row, '格式化日期': 格式化日期 };
+                });
+                
+                await sleep(100);
+                updateProgress(70, '步骤4: 合并状态...');
+                
+                // 步骤4: 状态合并
+                log('步骤4: 合并客审状态和发货时间类型', 'info');
+                const data4 = data3.map(row => {
+                    const 客审状态 = row['客审状态'] || '';
+                    const 发货时间类型 = row['发货时间类型'] || '';
+                    let 状态合并 = 客审状态 + '-' + 发货时间类型;
+                    状态合并 = 状态合并.replace(/-$/, '');
+                    return { ...row, '状态合并': 状态合并 };
+                });
+                
+                await sleep(100);
+                updateProgress(80, '步骤5: 生成统计项目...');
+                
+                // 步骤5: 统计项目
+                log('步骤5: 生成统计项目列', 'info');
+                const data5 = data4.map(row => {
+                    const 状态合并 = row['状态合并'] || '';
+                    const 格式化日期 = row['格式化日期'] || '';
+                    let 统计项目 = '未客审';
+                    
+                    if (状态合并.includes('未客审')) {
+                        统计项目 = '未客审';
+                    } else if (状态合并.includes('已客审-指定时间')) {
+                        统计项目 = 格式化日期 || '未客审';
+                    } else if (状态合并.includes('已客审-等通知')) {
+                        统计项目 = '等通知';
+                    }
+                    
+                    return { ...row, '统计项目': 统计项目 };
+                });
+                
+                processedData = data5;
+                log(`数据处理完成，共 ${processedData.length} 行`, 'success');
+                
+                await sleep(100);
+                updateProgress(85, '步骤6: 生成透视表...');
+                
+                // 步骤6: 生成透视表
+                log('步骤6: 生成透视表', 'info');
+                const { pivot, stat } = generatePivotTable(processedData);
+                pivotData = pivot;
+                statData = stat;
+                
+                await sleep(100);
+                updateProgress(95, '生成输出文件...');
+                
+                // 生成Excel文件
+                log('生成Excel文件...', 'info');
+                const excelBlob = generateExcel();
+                
+                // 生成图片
+                log('生成统计图表...', 'info');
+                const imageBlob = await generateChart();
+                
+                await sleep(100);
+                updateProgress(100, '处理完成！');
+                
+                // 显示结果
+                showPreview();
+                
+                // Bug4修复：设置下载链接并显示图表预览
+                const downloadExcel = document.getElementById('downloadExcel');
+                const downloadImage = document.getElementById('downloadImage');
+                
+                if (excelBlob) {
+                    downloadExcel.href = URL.createObjectURL(excelBlob);
+                    downloadExcel.download = '发货计划统计结果.xlsx';
+                    downloadExcel.classList.remove('disabled');
+                    downloadExcel.onclick = null;
+                }
+                
+                if (imageBlob) {
+                    // 使用data URL而非blob URL，支持长按保存图片
+                    const reader = new FileReader();
+                    reader.onload = function() {
+                        const dataUrl = reader.result;
+                        const downloadImage = document.getElementById('downloadImage');
+                        downloadImage.href = dataUrl;
+                        downloadImage.download = '发货计划透视表.png';
+                        downloadImage.classList.remove('disabled');
+                        downloadImage.onclick = null;
+                        
+                        // 显示图表预览
+                        const chartPreview = document.getElementById('chartPreview');
+                        const chartImage = document.getElementById('chartImage');
+                        chartImage.src = dataUrl;
+                        chartPreview.style.display = 'block';
+                    };
+                    reader.readAsDataURL(imageBlob);
+                }
+                
+                log('所有处理完成！', 'success');
+                
+            } catch (error) {
+                log(`处理失败: ${error.message}`, 'warning');
+                alert('处理失败：' + error.message);
+            }
+        }
+        
+        // 生成透视表（纯数据，不排序）和统计表（排序、格式化）
+        function generatePivotTable(data) {
+            // 过滤有效数据
+            const validData = data.filter(row => row[COLUMNS.CHANNEL] && String(row[COLUMNS.CHANNEL]).trim());
+            
+            // 按销售渠道和统计项目分组
+            const groups = {};
+            validData.forEach(row => {
+                const channel = row[COLUMNS.CHANNEL] || '未知';
+                const statItem = row['统计项目'] || '未客审';
+                const amount = parseFloat(row[COLUMNS.AMOUNT]) || 0;
+                
+                if (!groups[channel]) groups[channel] = {};
+                if (!groups[channel][statItem]) groups[channel][statItem] = 0;
+                groups[channel][statItem] += amount;
+            });
+            
+            // 获取所有统计项目（自然顺序，不排序）
+            const allStats = [];
+            const statsSet = new Set();
+            Object.values(groups).forEach(stats => {
+                Object.keys(stats).forEach(k => {
+                    if (!statsSet.has(k)) {
+                        statsSet.add(k);
+                        allStats.push(k);
+                    }
+                });
+            });
+            
+            // 构建透视表（自然顺序）
+            const pivot = {};
+            Object.keys(groups).sort().forEach(channel => {
+                pivot[channel] = {};
+                allStats.forEach(stat => {
+                    pivot[channel][stat] = groups[channel][stat] || 0;
+                });
+            });
+            
+            // 添加合计行
+            const totalRow = {};
+            allStats.forEach(stat => {
+                totalRow[stat] = 0;
+                Object.values(groups).forEach(stats => {
+                    totalRow[stat] += stats[stat] || 0;
+                });
+            });
+            pivot['合计'] = totalRow;
+            
+            // ========== 统计表（在这里做排序和格式化） ==========
+            // 排序函数：日期从小到大、等通知(1)、未客审(2)
+            const getSortOrder = (x) => {
+                if (x === '未客审') return 1000001;
+                if (x === '等通知') return 1000000;
+                // 日期排序：提取年月进行数值比较，返回值在10000-99999范围
+                const dateMatch = x.match(/(\d+)年(\d+)月/);
+                if (dateMatch) {
+                    return parseInt(dateMatch[1]) * 100 + parseInt(dateMatch[2]);
+                }
+                return 999999; // 其他排在日期之后、等通知之前
+            };
+            
+            // 列排序：日期(小) → 等通知 → 未客审 → 合计
+            const sortedStats = Array.from(allStats).sort((a, b) => getSortOrder(a) - getSortOrder(b));
+            sortedStats.push('合计'); // 合计列放最后
+            
+            // 保存到全局变量，供预览使用
+            window.sortedStats = sortedStats;
+            
+            // 计算每个销售渠道的合计金额（原始数据，单位元）
+            const channelTotals = {};
+            Object.keys(groups).forEach(channel => {
+                let total = 0;
+                allStats.forEach(s => {
+                    total += groups[channel][s] || 0;
+                });
+                channelTotals[channel] = total;
+            });
+            
+            // 按合计金额降序排序（合计行除外）
+            const sortedChannels = Object.keys(groups).sort((a, b) => {
+                return channelTotals[b] - channelTotals[a]; // 降序
+            });
+            
+            // 构建统计表（已排序，数据转为万元）
+            const stat = {};
+            
+            // 构建数据行（已排序）
+            sortedChannels.forEach(channel => {
+                stat[channel] = {};
+                allStats.forEach(s => {
+                    stat[channel][s] = (groups[channel][s] || 0) / 10000;
+                });
+                // 添加合计列
+                stat[channel]['合计'] = channelTotals[channel] / 10000;
+            });
+            
+            // 添加合计行（保持最后）
+            const statTotalRow = {};
+            allStats.forEach(s => {
+                statTotalRow[s] = 0;
+                Object.values(groups).forEach(stats => {
+                    statTotalRow[s] += (stats[s] || 0) / 10000;
+                });
+            });
+            statTotalRow['合计'] = Object.values(channelTotals).reduce((sum, t) => sum + t, 0) / 10000;
+            stat['合计'] = statTotalRow;
+            
+            return { pivot, stat, sortedStats };
+        }
+        
+        // 生成Excel文件
+        function generateExcel() {
+            // Sheet1: 处理后的数据
+            const ws1 = XLSX.utils.json_to_sheet(processedData);
+            
+            // 透视表
+            const pivotRows = [];
+            Object.entries(pivotData).forEach(([channel, stats]) => {
+                const row = { '销售渠道': channel };
+                Object.entries(stats).forEach(([k, v]) => {
+                    row[k] = typeof v === 'number' ? v.toFixed(2) : v;
+                });
+                pivotRows.push(row);
+            });
+            const ws2 = XLSX.utils.json_to_sheet(pivotRows);
+            
+            // 统计表（添加标题）
+            const statRows = [{ '未发货订单统计 2026年05月05日': '' }];
+            Object.entries(statData).forEach(([channel, stats]) => {
+                const row = { '销售渠道': channel };
+                Object.entries(stats).forEach(([k, v]) => {
+                    row[k] = typeof v === 'number' ? v.toFixed(2) : v;
+                });
+                statRows.push(row);
+            });
+            const ws3 = XLSX.utils.json_to_sheet(statRows);
+            
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws1, 'Sheet1_处理后');
+            XLSX.utils.book_append_sheet(wb, ws2, '透视表');
+            XLSX.utils.book_append_sheet(wb, ws3, '统计表');
+            
+            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+            return new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        }
+        
+        // 生成图表图片 - 同步版本
+        function generateChart() {
+            const canvas = document.getElementById('chartCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // 设置画布大小
+            canvas.width = 1400;
+            canvas.height = 750;
+            
+            // 背景
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 标题
+            ctx.fillStyle = '#333333';
+            ctx.font = 'bold 26px Microsoft YaHei, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('未发货订单统计 2026年05月05日', canvas.width / 2, 55);
+            
+            // 使用sortedStats确保列顺序正确
+            const channels = Object.keys(statData);
+            const stats = window.sortedStats && window.sortedStats.length > 0 ? window.sortedStats : 
+                          (channels.length > 0 ? Object.keys(statData[channels[0]]) : []);
+            
+            // 表格位置 - 调整列宽，第一列更宽
+            const startX = 50;
+            const startY = 100;
+            const firstColWidth = 180;  // 销售渠道列更宽
+            const otherColWidth = 120;  // 其他列
+            const cellHeight = 50;
+            const rowHeight = 55;
+            
+            // 表头
+            ctx.fillStyle = '#4472C4';
+            ctx.fillRect(startX, startY, firstColWidth, cellHeight);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 14px Microsoft YaHei, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('销售渠道', startX + firstColWidth / 2, startY + cellHeight / 2 + 5);
+            
+            stats.forEach((stat, i) => {
+                const x = startX + firstColWidth + i * otherColWidth;
+                ctx.fillStyle = '#4472C4';
+                ctx.fillRect(x, startY, otherColWidth, cellHeight);
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText(stat, x + otherColWidth / 2, startY + cellHeight / 2 + 5);
+            });
+            
+            // 数据行
+            channels.forEach((channel, rowIndex) => {
+                const y = startY + (rowIndex + 1) * rowHeight;
+                
+                // 交替背景色
+                if (rowIndex === channels.length - 1) {
+                    ctx.fillStyle = '#FFC000'; // 合计行
+                } else if (rowIndex % 2 === 0) {
+                    ctx.fillStyle = '#E8F0FE';
+                } else {
+                    ctx.fillStyle = '#ffffff';
+                }
+                ctx.fillRect(startX, y, firstColWidth + stats.length * otherColWidth, rowHeight);
+                
+                // 销售渠道列
+                ctx.fillStyle = rowIndex === channels.length - 1 ? '#333' : '#333';
+                ctx.font = rowIndex === channels.length - 1 ? 'bold 12px' : '12px';
+                ctx.textAlign = 'center';
+                ctx.fillText(channel, startX + firstColWidth / 2, y + rowHeight / 2 + 5);
+                
+                // 数据列 - 加"万"单位，0值显示为空白
+                stats.forEach((stat, colIndex) => {
+                    const x = startX + firstColWidth + colIndex * otherColWidth;
+                    const val = statData[channel][stat];
+                    const text = (typeof val === 'number' && val !== 0) ? val.toFixed(2) + '万' : '';
+                    ctx.fillStyle = '#333';
+                    ctx.fillText(text, x + otherColWidth / 2, y + rowHeight / 2 + 5);
+                });
+            });
+            
+            // 边框
+            ctx.strokeStyle = '#cccccc';
+            ctx.lineWidth = 1;
+            const tableWidth = firstColWidth + stats.length * otherColWidth;
+            const tableHeight = rowHeight * (channels.length + 1);
+            ctx.strokeRect(startX, startY, tableWidth, tableHeight);
+            
+            // 内部网格线
+            for (let i = 0; i <= channels.length; i++) {
+                const y = startY + i * rowHeight;
+                ctx.beginPath();
+                ctx.moveTo(startX, y);
+                ctx.lineTo(startX + tableWidth, y);
+                ctx.stroke();
+            }
+            // 第一列后画竖线
+            const x1 = startX + firstColWidth;
+            ctx.beginPath();
+            ctx.moveTo(x1, startY);
+            ctx.lineTo(x1, startY + tableHeight);
+            ctx.stroke();
+            // 其他列的竖线
+            for (let i = 0; i < stats.length; i++) {
+                const x = startX + firstColWidth + (i + 1) * otherColWidth;
+                ctx.beginPath();
+                ctx.moveTo(x, startY);
+                ctx.lineTo(x, startY + tableHeight);
+                ctx.stroke();
+            }
+            
+            // 返回Blob
+            return new Promise((resolve) => {
+                canvas.toBlob((blob) => {
+                    resolve(blob);
+                }, 'image/png');
+            });
+        }
+        
+        // 显示预览
+        async function showPreview() {
+            const preview = document.getElementById('tablePreview');
+            const channels = Object.keys(statData);
+            
+            // Bug3修复：使用sortedStats确保列顺序正确（销售渠道 | 日期从小到大 | 等通知 | 未客审 | 合计）
+            const stats = window.sortedStats && window.sortedStats.length > 0 ? window.sortedStats : 
+                          (channels.length > 0 ? Object.keys(statData[channels[0]]) : []);
+            
+            let html = '<table class="preview-table"><thead><tr>';
+            html += '<th>销售渠道</th>';
+            stats.forEach(s => html += `<th>${s}</th>`);
+            html += '</tr></thead><tbody>';
+            
+            channels.forEach(channel => {
+                html += '<tr>';
+                html += `<td>${channel}</td>`;
+                stats.forEach(s => {
+                    const val = statData[channel][s];
+                    // 0值显示为空白
+                    html += `<td>${typeof val === 'number' && val !== 0 ? val.toFixed(2) + '万' : ''}</td>`;
+                });
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            preview.innerHTML = html;
+        }
+        
+        // 重置
+        function resetAll() {
+            originalData = null;
+            processedData = null;
+            pivotData = null;
+            statData = null;
+            window.sortedStats = [];
+            
+            document.getElementById('urlInput').value = '';
+            document.getElementById('fileInput').value = '';
+            fileInfo.style.display = 'none';
+            processBtn.disabled = true;
+            progressSection.style.display = 'none';
+            logContainer.classList.add('hidden');
+            logContainer.innerHTML = '';
+            outputCard.classList.add('hidden');
+            
+            // Bug4修复：重置图表预览
+            const chartPreview = document.getElementById('chartPreview');
+            const chartImage = document.getElementById('chartImage');
+            if (chartPreview) chartPreview.style.display = 'none';
+            if (chartImage) chartImage.src = '';
+            
+            log('已重置', 'info');
+        }
+        
+        // 工具函数
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+    </script>
+</body>
+</html>
