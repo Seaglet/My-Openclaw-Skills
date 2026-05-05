@@ -390,6 +390,118 @@
             font-size: 12px;
             margin-left: 10px;
         }
+        
+        /* 月内发货计划金额统计模块样式 */
+        .monthly-chart-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+        }
+        
+        .monthly-chart-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        
+        .monthly-chart-controls label {
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .monthly-select {
+            padding: 10px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            min-width: 180px;
+            cursor: pointer;
+            background: white;
+        }
+        
+        .monthly-select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn-stat {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-stat:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-stat:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .monthly-chart-container {
+            position: relative;
+            margin: 20px auto;
+            text-align: center;
+        }
+        
+        #monthlyChartCanvas {
+            max-width: 100%;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background: white;
+        }
+        
+        .monthly-total {
+            margin-top: 15px;
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .monthly-total span {
+            color: #667eea;
+            font-size: 24px;
+        }
+        
+        .monthly-chart-placeholder {
+            padding: 60px 20px;
+            text-align: center;
+            color: #999;
+            font-size: 14px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .download-chart-btn {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 10px 24px;
+            background: #4caf50;
+            color: white;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+        }
+        
+        .download-chart-btn:hover {
+            background: #45a049;
+        }
     </style>
 </head>
 <body>
@@ -492,6 +604,27 @@
                 <h3 style="margin: 20px 0 15px; color: #333;">📋 统计表预览</h3>
                 <div id="tablePreview">
                     <p style="color: #999; text-align: center; padding: 40px;">等待处理数据...</p>
+                </div>
+            </div>
+            
+            <!-- 月内发货计划金额统计模块 -->
+            <div class="monthly-chart-section" id="monthlyChartSection">
+                <h3 style="margin-bottom: 15px; color: #333; font-size: 1.1rem;">
+                    📊 月内发货计划金额统计
+                </h3>
+                <div class="monthly-chart-controls">
+                    <label for="monthYearSelect">选择年月：</label>
+                    <select id="monthYearSelect" class="monthly-select">
+                        <option value="">-- 请选择年月 --</option>
+                    </select>
+                    <button class="btn-stat" id="startStatBtn" onclick="generateMonthlyChart()" disabled>
+                        📊 开始统计
+                    </button>
+                </div>
+                <div id="monthlyChartArea">
+                    <div class="monthly-chart-placeholder">
+                        请先加载数据并处理，选择年月后点击"开始统计"
+                    </div>
                 </div>
             </div>
         </div>
@@ -768,6 +901,9 @@
                 
                 // 显示结果
                 showPreview();
+                
+                // 填充月内发货计划金额统计的年月下拉框
+                populateMonthYearSelect();
                 
                 // Bug4修复：设置下载链接并显示图表预览
                 const downloadExcel = document.getElementById('downloadExcel');
@@ -1130,6 +1266,9 @@
             if (chartPreview) chartPreview.style.display = 'none';
             if (chartImage) chartImage.src = '';
             
+            // 重置月内发货计划金额统计模块
+            resetMonthlyChart();
+            
             log('已重置', 'info');
         }
         
@@ -1325,6 +1464,310 @@
         // 工具函数
         function sleep(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
+        }
+        
+        // ==================== 月内发货计划金额统计功能 ====================
+        
+        // 获取当前年月字符串（格式：2026年05月）
+        function getCurrentYearMonth() {
+            const now = new Date();
+            return `${now.getFullYear()}年${String(now.getMonth() + 1).padStart(2, '0')}月`;
+        }
+        
+        // 填充年月下拉框
+        function populateMonthYearSelect() {
+            const select = document.getElementById('monthYearSelect');
+            const startBtn = document.getElementById('startStatBtn');
+            
+            if (!processedData || processedData.length === 0) {
+                select.innerHTML = '<option value="">-- 请先加载数据 --</option>';
+                startBtn.disabled = true;
+                return;
+            }
+            
+            // 从processedData的"统计项目"列获取唯一值，排除"等通知"和"未客审"
+            const uniqueMonths = new Set();
+            processedData.forEach(row => {
+                const statItem = row['统计项目'];
+                if (statItem && typeof statItem === 'string') {
+                    // 只保留日期格式如"2026年05月"的选项
+                    if (statItem.match(/^\d{4}年\d{1,2}月$/) && 
+                        statItem !== '等通知' && statItem !== '未客审') {
+                        uniqueMonths.add(statItem);
+                    }
+                }
+            });
+            
+            // 转换为数组并排序（日期从小到大）
+            const sortedMonths = Array.from(uniqueMonths).sort((a, b) => {
+                const aMatch = a.match(/(\d{4})年(\d{1,2})月/);
+                const bMatch = b.match(/(\d{4})年(\d{1,2})月/);
+                if (aMatch && bMatch) {
+                    const aVal = parseInt(aMatch[1]) * 100 + parseInt(aMatch[2]);
+                    const bVal = parseInt(bMatch[1]) * 100 + parseInt(bMatch[2]);
+                    return aVal - bVal;
+                }
+                return 0;
+            });
+            
+            // 清空并填充下拉框
+            select.innerHTML = '<option value="">-- 请选择年月 --</option>';
+            const currentMonth = getCurrentYearMonth();
+            let hasCurrentMonth = false;
+            
+            sortedMonths.forEach(month => {
+                const option = document.createElement('option');
+                option.value = month;
+                option.textContent = month;
+                if (month === currentMonth) {
+                    option.selected = true;
+                    hasCurrentMonth = true;
+                }
+                select.appendChild(option);
+            });
+            
+            // 如果有当前月的选项且被选中，启用按钮
+            startBtn.disabled = sortedMonths.length === 0;
+            
+            if (hasCurrentMonth) {
+                startBtn.disabled = false;
+            }
+        }
+        
+        // 生成月内发货计划金额柱状图
+        function generateMonthlyChart() {
+            const select = document.getElementById('monthYearSelect');
+            const selectedMonth = select.value;
+            const chartArea = document.getElementById('monthlyChartArea');
+            
+            if (!selectedMonth || !processedData) {
+                chartArea.innerHTML = '<div class="monthly-chart-placeholder">请先选择年月</div>';
+                return;
+            }
+            
+            // 筛选数据：统计项目 === 选中的年月值
+            const filteredData = processedData.filter(row => row['统计项目'] === selectedMonth);
+            
+            if (filteredData.length === 0) {
+                chartArea.innerHTML = '<div class="monthly-chart-placeholder">该月暂无数据</div>';
+                return;
+            }
+            
+            // 按日期分组求和应收合计
+            const dateAmounts = {};
+            filteredData.forEach(row => {
+                const promiseTime = row[COLUMNS.PROMISE_TIME];
+                const amount = parseFloat(row[COLUMNS.AMOUNT]) || 0;
+                
+                if (promiseTime) {
+                    let dateKey = '';
+                    try {
+                        const date = new Date(promiseTime);
+                        if (!isNaN(date.getTime())) {
+                            dateKey = `${date.getMonth() + 1}月${date.getDate()}日`;
+                        }
+                    } catch (e) {
+                        // 如果不是日期格式，尝试直接提取日期部分
+                        const strDate = String(promiseTime);
+                        const dayMatch = strDate.match(/(\d{1,2})[月\-/](\d{1,2})/);
+                        if (dayMatch) {
+                            dateKey = `${dayMatch[1]}月${dayMatch[2]}日`;
+                        }
+                    }
+                    
+                    if (dateKey) {
+                        if (!dateAmounts[dateKey]) {
+                            dateAmounts[dateKey] = 0;
+                        }
+                        dateAmounts[dateKey] += amount;
+                    }
+                }
+            });
+            
+            // 按日期排序
+            const sortedDates = Object.keys(dateAmounts).sort((a, b) => {
+                const aMatch = a.match(/(\d+)月(\d+)日/);
+                const bMatch = b.match(/(\d+)月(\d+)日/);
+                if (aMatch && bMatch) {
+                    const aDay = parseInt(aMatch[2]);
+                    const bDay = parseInt(bMatch[2]);
+                    return aDay - bDay;
+                }
+                return 0;
+            });
+            
+            if (sortedDates.length === 0) {
+                chartArea.innerHTML = '<div class="monthly-chart-placeholder">无法解析日期数据</div>';
+                return;
+            }
+            
+            // 计算总金额
+            const totalAmount = Object.values(dateAmounts).reduce((sum, val) => sum + val, 0);
+            
+            // 绘制柱状图
+            const chartHtml = `
+                <div class="monthly-chart-container">
+                    <canvas id="monthlyChartCanvas"></canvas>
+                    <div class="monthly-total">总计划发货金额：<span>${formatCurrency(totalAmount)}</span></div>
+                    <button class="download-chart-btn" id="downloadMonthlyChartBtn" onclick="downloadMonthlyChart()">
+                        ⬇️ 下载图片
+                    </button>
+                </div>
+            `;
+            chartArea.innerHTML = chartHtml;
+            
+            // 绘制Canvas柱状图
+            setTimeout(() => {
+                drawMonthlyBarChart(sortedDates, dateAmounts, selectedMonth);
+            }, 100);
+        }
+        
+        // 绘制月内柱状图
+        function drawMonthlyBarChart(dates, amounts, monthLabel) {
+            const canvas = document.getElementById('monthlyChartCanvas');
+            if (!canvas) return;
+            
+            const ctx = canvas.getContext('2d');
+            
+            // 画布尺寸设置
+            const numBars = dates.length;
+            const barWidth = Math.min(60, Math.max(30, 800 / numBars - 20));
+            const barGap = Math.min(15, barWidth * 0.3);
+            const chartWidth = numBars * (barWidth + barGap) + 100; // 左边距60，右边距40
+            const chartHeight = 400;
+            const labelHeight = 50;
+            const titleHeight = 50;
+            
+            canvas.width = chartWidth;
+            canvas.height = chartHeight + titleHeight + labelHeight;
+            
+            // 背景
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 标题
+            ctx.fillStyle = '#333333';
+            ctx.font = 'bold 20px Microsoft YaHei, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${monthLabel} 每日发货计划金额统计`, canvas.width / 2, 35);
+            
+            // 计算最大值
+            const maxAmount = Math.max(...Object.values(amounts));
+            const yAxisMax = Math.ceil(maxAmount / 10000) * 10000 || 10000; // 向上取整到万
+            
+            // 图表区域
+            const chartLeft = 60;
+            const chartTop = titleHeight + 10;
+            const chartRight = canvas.width - 40;
+            const chartBottom = chartTop + chartHeight;
+            const chartAreaWidth = chartRight - chartLeft;
+            const chartAreaHeight = chartHeight;
+            
+            // 绘制Y轴
+            ctx.strokeStyle = '#cccccc';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(chartLeft, chartTop);
+            ctx.lineTo(chartLeft, chartBottom);
+            ctx.stroke();
+            
+            // Y轴刻度和网格线
+            const yTicks = 5;
+            ctx.font = '12px Microsoft YaHei, sans-serif';
+            ctx.fillStyle = '#666666';
+            ctx.textAlign = 'right';
+            
+            for (let i = 0; i <= yTicks; i++) {
+                const yValue = (yAxisMax / yTicks) * (yTicks - i);
+                const yPos = chartTop + (chartAreaHeight / yTicks) * i;
+                
+                // 刻度值
+                ctx.fillText(formatCurrency(yValue), chartLeft - 8, yPos + 4);
+                
+                // 网格线
+                ctx.strokeStyle = '#e0e0e0';
+                ctx.beginPath();
+                ctx.moveTo(chartLeft, yPos);
+                ctx.lineTo(chartRight, yPos);
+                ctx.stroke();
+            }
+            
+            // 绘制柱状图
+            const startX = chartLeft + 20;
+            const maxBarHeight = chartAreaHeight - 30;
+            
+            // 渐变色
+            const gradient = ctx.createLinearGradient(0, chartTop, 0, chartBottom);
+            gradient.addColorStop(0, '#667eea');
+            gradient.addColorStop(1, '#764ba2');
+            
+            dates.forEach((date, index) => {
+                const x = startX + index * (barWidth + barGap);
+                const amount = amounts[date];
+                const barHeight = (amount / yAxisMax) * maxBarHeight;
+                const barY = chartBottom - barHeight;
+                
+                // 绘制柱子
+                ctx.fillStyle = gradient;
+                ctx.fillRect(x, barY, barWidth, barHeight);
+                
+                // 柱子顶部金额
+                ctx.fillStyle = '#333333';
+                ctx.font = 'bold 11px Microsoft YaHei, sans-serif';
+                ctx.textAlign = 'center';
+                const displayAmount = amount >= 10000 ? (amount / 10000).toFixed(1) + '万' : amount.toFixed(0);
+                ctx.fillText(displayAmount, x + barWidth / 2, barY - 5);
+                
+                // X轴标签（日期）
+                ctx.fillStyle = '#666666';
+                ctx.font = '11px Microsoft YaHei, sans-serif';
+                ctx.save();
+                ctx.translate(x + barWidth / 2, chartBottom + 15);
+                ctx.rotate(-Math.PI / 6); // 倾斜45度
+                ctx.textAlign = 'right';
+                ctx.fillText(date, 0, 0);
+                ctx.restore();
+            });
+            
+            // 保存当前图表DataURL供下载
+            canvas.chartDataUrl = canvas.toDataURL('image/png');
+        }
+        
+        // 格式化金额显示
+        function formatCurrency(amount) {
+            if (amount >= 10000) {
+                return (amount / 10000).toFixed(2) + '万';
+            }
+            return amount.toFixed(2) + '元';
+        }
+        
+        // 下载月内柱状图
+        function downloadMonthlyChart() {
+            const canvas = document.getElementById('monthlyChartCanvas');
+            if (!canvas || !canvas.chartDataUrl) {
+                alert('图表尚未生成，请先生成图表');
+                return;
+            }
+            
+            const link = document.createElement('a');
+            link.download = `月内发货计划金额统计.png`;
+            link.href = canvas.chartDataUrl;
+            link.click();
+        }
+        
+        // 重置月内统计模块
+        function resetMonthlyChart() {
+            const select = document.getElementById('monthYearSelect');
+            const startBtn = document.getElementById('startStatBtn');
+            const chartArea = document.getElementById('monthlyChartArea');
+            
+            select.innerHTML = '<option value="">-- 请选择年月 --</option>';
+            startBtn.disabled = true;
+            chartArea.innerHTML = `
+                <div class="monthly-chart-placeholder">
+                    请先加载数据并处理，选择年月后点击"开始统计"
+                </div>
+            `;
         }
     </script>
 </body>
